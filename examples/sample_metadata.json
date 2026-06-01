@@ -1,0 +1,47 @@
+{
+  "_comment": "Static metadata fixture modelled on BigQuery INFORMATION_SCHEMA. Pass with --metadata to enable metadata-aware rules. Produce a real one by running the queries in bq_optimizer/metadata/schema.py against your project.",
+  "tables": {
+    "project.dataset.users": {
+      "table_type": "BASE TABLE",
+      "row_count": 5000000,
+      "size_bytes": 800000000,
+      "partition_column": "created_date",
+      "clustering_columns": ["country"],
+      "columns": {
+        "user_key": {"data_type": "STRING"},
+        "email": {"data_type": "STRING"},
+        "created_date": {"data_type": "DATE", "is_partitioning_column": true}
+      }
+    },
+    "project.dataset.orders": {
+      "table_type": "BASE TABLE",
+      "row_count": 250000000,
+      "size_bytes": 64000000000,
+      "partition_column": "order_date",
+      "columns": {
+        "order_id": {"data_type": "INT64"},
+        "user_key": {"data_type": "STRING"},
+        "order_date": {"data_type": "DATE", "is_partitioning_column": true}
+      }
+    },
+    "project.dataset.exchange_rates_ext": {
+      "table_type": "EXTERNAL",
+      "row_count": 200,
+      "size_bytes": 40000,
+      "columns": {
+        "currency": {"data_type": "STRING"},
+        "rate": {"data_type": "NUMERIC"}
+      }
+    }
+  },
+  "jobs": [
+    {
+      "job_id": "bquxjob_resource_1",
+      "state": "DONE",
+      "error_reason": "resourcesExceeded",
+      "error_message": "Resources exceeded during query execution: the query could not be executed in the allotted memory.",
+      "statement_type": "SELECT",
+      "query": "SELECT * FROM project.dataset.orders o JOIN project.dataset.users u ..."
+    }
+  ]
+}
