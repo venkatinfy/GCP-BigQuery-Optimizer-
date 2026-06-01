@@ -8,7 +8,7 @@ class SelectStarRule(BaseRule):
     rule_id = "SELECT_STAR"
     title = "SELECT * usage detected"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for select in expression.find_all(exp.Select):
             for col in select.expressions:

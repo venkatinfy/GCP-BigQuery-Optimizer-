@@ -8,7 +8,7 @@ class CrossJoinRule(BaseRule):
     rule_id = "CROSS_JOIN"
     title = "CROSS JOIN detected"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for join in expression.find_all(exp.Join):
             kind = join.args.get("kind")

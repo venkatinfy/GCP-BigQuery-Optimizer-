@@ -8,7 +8,7 @@ class ScalarSubqueryInSelectRule(BaseRule):
     rule_id = "SCALAR_SUBQUERY_IN_SELECT"
     title = "Scalar subquery in SELECT list"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for select in expression.find_all(exp.Select):
             for item in select.expressions:

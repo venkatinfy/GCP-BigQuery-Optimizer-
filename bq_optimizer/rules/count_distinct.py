@@ -8,7 +8,7 @@ class CountDistinctRule(BaseRule):
     rule_id = "COUNT_DISTINCT"
     title = "COUNT(DISTINCT ...) usage"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for func in expression.find_all(exp.Count):
             # sqlglot represents COUNT(DISTINCT x) as Count(this=Distinct(expressions=[col]))

@@ -40,9 +40,16 @@ Each optimization rule lives in `bq_optimizer/rules/` as its own module. Follow 
 
 Create `bq_optimizer/rules/my_new_rule.py` using this template:
 
+There are two kinds of rule:
+
+- **Statement-level** rules subclass `BaseRule` and are invoked once per top-level
+  statement via `analyze(expression, original_sql, context)`.
+- **Session-level** rules subclass `SessionRule` and are invoked once over *all*
+  statements via `analyze_session(statements, context)` — use these for patterns
+  that only emerge across statements (e.g. INSERT+UPDATE → MERGE).
+
 ```python
 from typing import List
-import sqlglot
 import sqlglot.expressions as exp
 from .base import BaseRule, Finding, Severity
 
@@ -50,11 +57,12 @@ from .base import BaseRule, Finding, Severity
 class MyNewRule(BaseRule):
     rule_id = "MY_NEW_RULE"          # Unique SCREAMING_SNAKE_CASE identifier
     title = "Short human-readable title"
+    requires_metadata = False        # set True if the rule needs INFORMATION_SCHEMA
 
-    def analyze(self, expression: sqlglot.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         # Walk the AST and detect the anti-pattern
-        for node in expression.find_all(exp.SomeExpression):
+        for node in expression.find_all(exp.Column):
             findings.append(Finding(
                 rule_id=self.rule_id,
                 title=self.title,
@@ -67,38 +75,69 @@ class MyNewRule(BaseRule):
         return findings
 ```
 
+#### Metadata-aware rules
+
+Set `requires_metadata = True` and read from `context.metadata` (a
+`MetadataProvider`). **Always degrade gracefully** — return `[]` (never raise)
+when metadata is unavailable:
+
+```python
+def analyze(self, expression, original_sql, context=None):
+    if context is None or context.metadata is None:
+        return []
+    table = context.metadata.get_table("project.dataset.table")
+    ...
+```
+
+Helpers in `bq_optimizer/util.py` (`table_fqn`, `build_alias_map`,
+`physical_tables`, …) handle table-name normalization and alias resolution.
+
+#### Session-level rules
+
+```python
+from .base import SessionRule, Finding, Severity
+
+class MySessionRule(SessionRule):
+    rule_id = "MY_SESSION_RULE"
+    title = "..."
+
+    def analyze_session(self, statements, context) -> List[Finding]:
+        # Reason across every statement in `statements`.
+        return []
+```
+
 ### 2. Register the rule
 
 In `bq_optimizer/rules/__init__.py`:
 
 1. Add an import: `from .my_new_rule import MyNewRule`
-2. Add to `ALL_RULES`: `MyNewRule(),`
-3. Add to `__all__`
+2. Add it to `STATEMENT_RULES` (or `SESSION_RULES` for a `SessionRule`)
+3. Add it to `__all__`
 
 ### 3. Write tests
 
-Add a test file or extend `tests/test_rules.py`:
+Add tests to `tests/test_new_rules.py` (build an `AnalysisContext`, with a
+`StaticMetadataProvider` when the rule needs metadata):
 
 ```python
+import sqlglot
+from bq_optimizer.context import AnalysisContext
 from bq_optimizer.rules.my_new_rule import MyNewRule
 
-def test_my_new_rule_detects():
-    rule = MyNewRule()
-    sql = "... SQL that triggers the rule ..."
-    findings = rule.analyze(sqlglot.parse_one(sql, dialect="bigquery"), sql)
-    assert len(findings) >= 1
-    assert findings[0].rule_id == "MY_NEW_RULE"
+def _ctx(sql, metadata=None):
+    stmts = [s for s in sqlglot.parse(sql, dialect="bigquery") if s is not None]
+    return AnalysisContext(statements=stmts, metadata=metadata, raw_sql=sql)
 
-def test_my_new_rule_clean():
-    rule = MyNewRule()
-    sql = "... SQL that should NOT trigger the rule ..."
-    findings = rule.analyze(sqlglot.parse_one(sql, dialect="bigquery"), sql)
-    assert findings == []
+def test_my_new_rule_detects():
+    sql = "... SQL that triggers the rule ..."
+    findings = MyNewRule().analyze(sqlglot.parse_one(sql, dialect="bigquery"), sql, _ctx(sql))
+    assert findings and findings[0].rule_id == "MY_NEW_RULE"
 ```
 
 ### 4. Update the README
 
-Add a row to the **Rules** table in `README.md`.
+Add a row to the appropriate **Rules** table in `README.md` (and the
+`INFORMATION_SCHEMA` mapping table if the rule consumes metadata).
 
 ---
 

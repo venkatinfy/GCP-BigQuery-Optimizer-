@@ -8,7 +8,7 @@ class OrderByWithoutLimitRule(BaseRule):
     rule_id = "ORDER_BY_WITHOUT_LIMIT"
     title = "ORDER BY without LIMIT"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         # Check top-level select
         if isinstance(expression, exp.Select):

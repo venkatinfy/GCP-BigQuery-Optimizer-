@@ -62,6 +62,10 @@ class TextReporter:
         lines.append("")
 
         lines.append(self._c("ANALYSIS SUMMARY:", ANSI_BOLD))
+        lines.append(f"  Statements analyzed: {result.statement_count}")
+        meta_note = "metadata: supplied (INFORMATION_SCHEMA-aware rules active)" \
+            if result.metadata_used else "metadata: none (metadata-aware rules skipped)"
+        lines.append(f"  {meta_note}")
         lines.append(f"  Total findings: {result.total_count}")
         crit = self._c(f"Critical: {result.critical_count}", ANSI_RED if not self.no_color else "")
         warn = self._c(f"Warnings: {result.warning_count}", ANSI_YELLOW if not self.no_color else "")
@@ -236,6 +240,10 @@ class HTMLReporter:
 
   <section>
     <h2>Analysis Summary</h2>
+    <p style="color:#5f6368;font-size:0.85rem">
+      Statements analyzed: {result.statement_count} &nbsp;|&nbsp;
+      {"Metadata supplied — INFORMATION_SCHEMA-aware rules active" if result.metadata_used else "No metadata — metadata-aware rules skipped"}
+    </p>
     {no_findings_note}
     <div class="summary-cards">
       <div class="card card-total">

@@ -8,7 +8,7 @@ class NullComparisonRule(BaseRule):
     rule_id = "NULL_COMPARISON"
     title = "Incorrect NULL comparison"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for eq in expression.find_all(exp.EQ):
             left, right = eq.left, eq.right

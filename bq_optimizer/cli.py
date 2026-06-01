@@ -11,6 +11,7 @@ from typing import Optional
 from .analyzer import QueryAnalyzer
 from .report import TextReporter, HTMLReporter
 from .rules.base import Severity
+from .metadata.static import StaticMetadataProvider
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -21,6 +22,16 @@ def _build_parser() -> argparse.ArgumentParser:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--query", metavar="TEXT", help="SQL query string to analyze")
     group.add_argument("--file", metavar="PATH", type=Path, help="SQL file to read")
+    parser.add_argument(
+        "--metadata",
+        metavar="PATH",
+        type=Path,
+        help=(
+            "JSON metadata fixture (table types/sizes/columns + failed jobs) modelled on "
+            "INFORMATION_SCHEMA. Enables metadata-aware rules such as join keys, native "
+            "conversion, join ordering, and resource failures."
+        ),
+    )
     parser.add_argument(
         "--output-html",
         metavar="PATH",
@@ -65,7 +76,15 @@ def main() -> None:
         parser.print_help()
         sys.exit(1)
 
-    analyzer = QueryAnalyzer()
+    metadata = None
+    if args.metadata:
+        try:
+            metadata = StaticMetadataProvider.from_file(args.metadata)
+        except (OSError, ValueError) as exc:
+            print(f"Error reading metadata file: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    analyzer = QueryAnalyzer(metadata=metadata)
     result = analyzer.analyze(sql)
 
     if args.format == "json":
@@ -73,6 +92,8 @@ def main() -> None:
             "original_sql": result.original_sql,
             "rewritten_sql": result.rewritten_sql,
             "parse_error": result.parse_error,
+            "statement_count": result.statement_count,
+            "metadata_used": result.metadata_used,
             "summary": {
                 "total": result.total_count,
                 "critical": result.critical_count,

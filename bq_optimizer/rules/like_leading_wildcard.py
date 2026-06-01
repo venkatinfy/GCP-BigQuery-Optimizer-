@@ -8,7 +8,7 @@ class LikeLeadingWildcardRule(BaseRule):
     rule_id = "LIKE_LEADING_WILDCARD"
     title = "LIKE with leading wildcard"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for like in expression.find_all(exp.Like):
             pattern_expr = like.args.get("expression") or like.right

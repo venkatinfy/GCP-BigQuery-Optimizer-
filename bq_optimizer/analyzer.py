@@ -4,7 +4,9 @@ import re
 import sqlglot
 import sqlglot.expressions as exp
 
-from .rules import ALL_RULES, Finding, Severity
+from .rules import STATEMENT_RULES, SESSION_RULES, Finding, Severity
+from .context import AnalysisContext
+from .metadata.base import MetadataProvider
 
 
 @dataclass
@@ -13,6 +15,8 @@ class AnalysisResult:
     findings: List[Finding] = field(default_factory=list)
     rewritten_sql: str = ""
     parse_error: Optional[str] = None
+    statement_count: int = 0
+    metadata_used: bool = False
 
     @property
     def critical_count(self) -> int:
@@ -31,7 +35,7 @@ class AnalysisResult:
         return len(self.findings)
 
 
-def _apply_rewrites(sql: str, expression: exp.Expression, findings: List[Finding]) -> str:
+def _apply_rewrites(sql: str, findings: List[Finding]) -> str:
     """Apply safe textual rewrites and suggestion comments to the SQL."""
     result = sql
 
@@ -41,8 +45,7 @@ def _apply_rewrites(sql: str, expression: exp.Expression, findings: List[Finding
     result = re.sub(r'(\w+)\s*<>\s*NULL\b', r'\1 IS NOT NULL', result, flags=re.IGNORECASE)
 
     # Remove DISTINCT when GROUP BY present (simple regex-based approach)
-    has_group_by = bool(re.search(r'\bGROUP\s+BY\b', result, re.IGNORECASE))
-    if has_group_by:
+    if re.search(r'\bGROUP\s+BY\b', result, re.IGNORECASE):
         result = re.sub(r'\bSELECT\s+DISTINCT\b', 'SELECT', result, flags=re.IGNORECASE)
 
     # Add LIMIT suggestion after ORDER BY if no LIMIT
@@ -56,39 +59,52 @@ def _apply_rewrites(sql: str, expression: exp.Expression, findings: List[Finding
             flags=re.IGNORECASE | re.DOTALL,
         )
 
-    # Add partition filter suggestion comment after FROM if partition filter missing
-    partition_findings = [f for f in findings if f.rule_id == "PARTITION_FILTER"]
-    if partition_findings:
+    # Per-rule inline suggestion comments keyed off the findings produced.
+    rule_ids = {f.rule_id for f in findings}
+
+    if "PARTITION_FILTER" in rule_ids:
         result = re.sub(
             r'(\bFROM\b\s+`?[\w.]+`?)',
             r'\1 -- SUGGESTION: add partition filter in WHERE clause',
-            result,
-            count=1,
-            flags=re.IGNORECASE,
+            result, count=1, flags=re.IGNORECASE,
         )
 
-    # Replace COUNT(DISTINCT x) with a comment suggesting APPROX_COUNT_DISTINCT
+    if "TRUNCATE_DML" in rule_ids:
+        result = re.sub(
+            r'\bDELETE\s+FROM\b',
+            'TRUNCATE TABLE /* was: DELETE FROM (no WHERE) */',
+            result, count=1, flags=re.IGNORECASE,
+        )
+
+    if "TABLE_CLONING" in rule_ids:
+        result = re.sub(
+            r'(\bCREATE\s+TABLE\b[^;]*?)\bAS\s+SELECT\s+\*\s+FROM\b',
+            r'\1CLONE /* was: AS SELECT * FROM */',
+            result, count=1, flags=re.IGNORECASE,
+        )
+
     def replace_count_distinct(m: re.Match) -> str:
         inner = m.group(1)
         return f"COUNT(DISTINCT {inner}) /* SUGGESTION: APPROX_COUNT_DISTINCT({inner}) */"
 
     result = re.sub(
         r'\bCOUNT\s*\(\s*DISTINCT\s+([^)]+)\)',
-        replace_count_distinct,
-        result,
-        flags=re.IGNORECASE,
+        replace_count_distinct, result, flags=re.IGNORECASE,
     )
 
     return result
 
 
 class QueryAnalyzer:
+    def __init__(self, metadata: Optional[MetadataProvider] = None) -> None:
+        self.metadata = metadata
+
     def analyze(self, sql: str) -> AnalysisResult:
         sql = sql.strip()
-        result = AnalysisResult(original_sql=sql)
+        result = AnalysisResult(original_sql=sql, metadata_used=self.metadata is not None)
 
         try:
-            expression = sqlglot.parse_one(sql, dialect="bigquery")
+            parsed = sqlglot.parse(sql, dialect="bigquery")
         except Exception as e:
             result.parse_error = str(e)
             result.rewritten_sql = sql
@@ -101,18 +117,35 @@ class QueryAnalyzer:
             ))
             return result
 
-        for rule in ALL_RULES:
-            try:
-                findings = rule.analyze(expression, sql)
-                result.findings.extend(findings)
-            except Exception as e:
-                result.findings.append(Finding(
-                    rule_id=f"{rule.rule_id}_ERROR",
-                    title=f"Rule {rule.rule_id} failed",
-                    severity=Severity.INFO,
-                    description=f"Rule analysis error: {e}",
-                    recommendation="This is a bug in the optimizer. Please report it.",
-                ))
+        statements = [s for s in parsed if s is not None]
+        result.statement_count = len(statements)
+        context = AnalysisContext(statements=statements, metadata=self.metadata, raw_sql=sql)
 
-        result.rewritten_sql = _apply_rewrites(sql, expression, result.findings)
+        # Statement-level rules: once per top-level statement.
+        for statement in statements:
+            stmt_sql = statement.sql(dialect="bigquery")
+            for rule in STATEMENT_RULES:
+                try:
+                    result.findings.extend(rule.analyze(statement, stmt_sql, context))
+                except Exception as e:
+                    result.findings.append(self._rule_error(rule.rule_id, e))
+
+        # Session-level rules: once over all statements.
+        for rule in SESSION_RULES:
+            try:
+                result.findings.extend(rule.analyze_session(statements, context))
+            except Exception as e:
+                result.findings.append(self._rule_error(rule.rule_id, e))
+
+        result.rewritten_sql = _apply_rewrites(sql, result.findings)
         return result
+
+    @staticmethod
+    def _rule_error(rule_id: str, error: Exception) -> Finding:
+        return Finding(
+            rule_id=f"{rule_id}_ERROR",
+            title=f"Rule {rule_id} failed",
+            severity=Severity.INFO,
+            description=f"Rule analysis error: {error}",
+            recommendation="This is a bug in the optimizer. Please report it.",
+        )

@@ -4,12 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bq-optimizer"
-version = "0.1.0"
-description = "Systematic BigQuery SQL query analyzer and optimizer"
+version = "0.2.0"
+description = "Systematic BigQuery SQL query analyzer and optimizer with INFORMATION_SCHEMA-aware rules"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 dependencies = ["sqlglot>=20.0.0"]
+
+[project.optional-dependencies]
+# Live metadata via BigQuery INFORMATION_SCHEMA (otherwise use a static JSON fixture).
+bigquery = ["google-cloud-bigquery>=3.0.0"]
+dev = ["pytest>=7.0.0"]
 
 [project.scripts]
 bq-optimizer = "bq_optimizer.cli:main"

@@ -23,7 +23,7 @@ class PartitionFilterRule(BaseRule):
                 return True
         return False
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for select in expression.find_all(exp.Select):
             from_clause = select.args.get("from") or select.args.get("from_")

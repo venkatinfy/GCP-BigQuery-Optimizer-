@@ -8,7 +8,7 @@ class UnnecessaryDistinctRule(BaseRule):
     rule_id = "UNNECESSARY_DISTINCT"
     title = "Unnecessary DISTINCT with GROUP BY"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         for select in expression.find_all(exp.Select):
             has_distinct = select.args.get("distinct")

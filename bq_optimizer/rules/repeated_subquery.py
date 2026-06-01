@@ -8,7 +8,7 @@ class RepeatedSubqueryRule(BaseRule):
     rule_id = "REPEATED_SUBQUERY"
     title = "Repeated subquery detected"
 
-    def analyze(self, expression: exp.Expression, original_sql: str) -> List[Finding]:
+    def analyze(self, expression: exp.Expression, original_sql: str, context=None) -> List[Finding]:
         findings: List[Finding] = []
         subquery_texts: List[str] = []
         seen: set = set()
