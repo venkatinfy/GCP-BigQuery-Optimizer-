@@ -183,3 +183,69 @@ def test_analyzer_multi_statement_session_rules():
 def test_analyzer_metadata_flag_recorded():
     assert QueryAnalyzer().analyze("SELECT 1").metadata_used is False
     assert QueryAnalyzer(metadata=_meta()).analyze("SELECT 1").metadata_used is True
+
+
+# --- New rules (v0.3) ---------------------------------------------------------
+
+from bq_optimizer.rules.limit_no_bytes_reduction import LimitNoBytesReductionRule
+from bq_optimizer.rules.datetime_trunc_cast import DatetimeTruncCastRule
+from bq_optimizer.rules.sharded_tables import ShardedTablesRule
+from bq_optimizer.rules.wildcard_table_suffix import WildcardTableSuffixRule
+
+
+# LIMIT_NO_BYTES_REDUCTION
+def test_limit_no_bytes_reduction_detects_limit_without_where():
+    sql = "SELECT id, name FROM `project.dataset.events` LIMIT 100"
+    findings = LimitNoBytesReductionRule().analyze(_parse(sql), sql)
+    assert any(f.rule_id == "LIMIT_NO_BYTES_REDUCTION" for f in findings)
+
+
+def test_limit_no_bytes_reduction_clean_with_where():
+    sql = "SELECT id FROM `project.dataset.events` WHERE _PARTITIONDATE = '2023-01-01' LIMIT 100"
+    assert LimitNoBytesReductionRule().analyze(_parse(sql), sql) == []
+
+
+def test_limit_no_bytes_reduction_clean_no_limit():
+    sql = "SELECT id FROM `project.dataset.events` WHERE _PARTITIONDATE = '2023-01-01'"
+    assert LimitNoBytesReductionRule().analyze(_parse(sql), sql) == []
+
+
+# DATETIME_TRUNC_CAST
+def test_datetime_trunc_cast_detects_cast_in_where():
+    sql = "SELECT * FROM `p.d.t` WHERE CAST(event_date AS DATE) = '2023-01-01'"
+    findings = DatetimeTruncCastRule().analyze(_parse(sql), sql)
+    assert any(f.rule_id == "DATETIME_TRUNC_CAST" for f in findings)
+
+
+def test_datetime_trunc_cast_clean_date_function():
+    sql = "SELECT * FROM `p.d.t` WHERE DATE(event_date) = '2023-01-01'"
+    assert DatetimeTruncCastRule().analyze(_parse(sql), sql) == []
+
+
+def test_datetime_trunc_cast_no_partition_col_not_flagged():
+    sql = "SELECT * FROM `p.d.t` WHERE CAST(some_value AS INT64) = 5"
+    assert DatetimeTruncCastRule().analyze(_parse(sql), sql) == []
+
+
+# SHARDED_TABLES
+def test_sharded_tables_detects_date_suffix():
+    sql = "SELECT * FROM `project.dataset.events_20230101`"
+    findings = ShardedTablesRule().analyze(_parse(sql), sql)
+    assert any(f.rule_id == "SHARDED_TABLES" for f in findings)
+
+
+def test_sharded_tables_clean_no_suffix():
+    sql = "SELECT * FROM `project.dataset.events`"
+    assert ShardedTablesRule().analyze(_parse(sql), sql) == []
+
+
+# WILDCARD_TABLE_SUFFIX
+def test_wildcard_table_suffix_detects_usage():
+    sql = "SELECT * FROM `project.dataset.events_*` WHERE _TABLE_SUFFIX BETWEEN '20230101' AND '20231231'"
+    findings = WildcardTableSuffixRule().analyze(_parse(sql), sql)
+    assert any(f.rule_id == "WILDCARD_TABLE_SUFFIX" for f in findings)
+
+
+def test_wildcard_table_suffix_clean():
+    sql = "SELECT * FROM `project.dataset.events` WHERE event_date = '2023-01-01'"
+    assert WildcardTableSuffixRule().analyze(_parse(sql), sql) == []

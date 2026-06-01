@@ -21,6 +21,12 @@ from .native_conversion import NativeConversionRule
 from .join_ordering import JoinOrderingRule
 from .unfiltered_partition import UnfilteredPartitionRule
 
+# --- New rules (v0.3) ---------------------------------------------------------
+from .limit_no_bytes_reduction import LimitNoBytesReductionRule
+from .datetime_trunc_cast import DatetimeTruncCastRule
+from .sharded_tables import ShardedTablesRule
+from .wildcard_table_suffix import WildcardTableSuffixRule
+
 # --- Session-level rules (run once over all statements together) -------------
 from .merge_optimization import MergeOptimizationRule
 from .redundant_updates import RedundantUpdatesRule
@@ -47,6 +53,10 @@ STATEMENT_RULES = [
     NativeConversionRule(),
     JoinOrderingRule(),
     UnfilteredPartitionRule(),
+    LimitNoBytesReductionRule(),
+    DatetimeTruncCastRule(),
+    ShardedTablesRule(),
+    WildcardTableSuffixRule(),
 ]
 
 SESSION_RULES = [
@@ -69,4 +79,6 @@ __all__ = [
     "TableCloningRule", "StringComparisonRule", "SuboptimalJoinKeysRule",
     "NativeConversionRule", "JoinOrderingRule", "UnfilteredPartitionRule",
     "MergeOptimizationRule", "RedundantUpdatesRule", "ResourceFailuresRule",
+    "LimitNoBytesReductionRule", "DatetimeTruncCastRule",
+    "ShardedTablesRule", "WildcardTableSuffixRule",
 ]
