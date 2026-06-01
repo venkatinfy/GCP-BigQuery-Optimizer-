@@ -159,6 +159,10 @@ The **Meta?** column marks rules that consult `INFORMATION_SCHEMA` metadata; **S
 | `MERGE_OPTIMIZATION` | WARNING | session | – | `INSERT` and `UPDATE` of the same target in a session | Combine into a single atomic `MERGE` |
 | `REDUNDANT_UPDATES` | WARNING | session | – | Same table updated multiple times in one execution | Consolidate into one `UPDATE`/`MERGE` |
 | `RESOURCE_FAILURES` | CRITICAL | session | ✓ | Jobs that failed on resource/capacity limits | Reduce shuffle/memory; review slot reservations |
+| `LIMIT_NO_BYTES_REDUCTION` | INFO | statement | – | `LIMIT` without a `WHERE`/partition filter | Add a partition filter; `LIMIT` alone does not reduce bytes scanned in BigQuery |
+| `DATETIME_TRUNC_CAST` | WARNING | statement | – | `CAST(partition_col AS DATE)` in a `WHERE` clause | Replace with `DATE(col)` or `DATE_TRUNC(col, DAY)` to preserve partition pruning |
+| `SHARDED_TABLES` | WARNING | statement | – | Table name ending in `_YYYYMMDD` (date-sharded legacy pattern) | Migrate to a single partitioned table (`PARTITION BY DATE(...)`) |
+| `WILDCARD_TABLE_SUFFIX` | INFO | statement | – | `_TABLE_SUFFIX` pseudo-column (wildcard table query) | Migrate date-sharded tables to a partitioned table for better pruning |
 
 ---
 
